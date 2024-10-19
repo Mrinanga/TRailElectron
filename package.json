@@ -1,0 +1,50 @@
+{
+  "name": "billingsystem",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "electron": "electron .",
+    "build": "electron-builder"
+  },
+  "author": "mrinanga",
+  "license": "ISC",
+  "description": "This App is capable of doing all billing and accountancy calculations",
+  "devDependencies": {
+    "electron": "^31.3.1",
+    "electron-builder": "^25.1.8",
+    "electron-updater": "^6.3.9"
+  },
+  "dependencies": {
+    "@electron/remote": "^2.1.2",
+    "is-dev": "^0.1.4",
+    "react-router-dom": "^6.25.1"
+  },
+  "build": {
+    "appId": "com.digitalpanda.2024",
+    "icon": "build/favicon.ico",
+    "productName": "BillingSoftware",
+    "directories": {
+      "output": "dist"
+    },
+
+    "files": [
+      "build/**/*",
+      "main.js",
+      "package.json",
+      "intro.html",
+      "assets/**/*"
+    ],
+
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icons/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
