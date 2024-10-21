@@ -2,6 +2,7 @@ const { app, BrowserWindow, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
+const unzipper = require('unzipper'); // Import unzipper for logging zip contents
 require('@electron/remote/main').initialize();
 
 let introWindow;
@@ -104,37 +105,64 @@ function downloadUpdate(updateUrl) {
   const file = path.join(app.getPath('userData'), 'update.zip');
   const fileStream = fs.createWriteStream(file);
 
+  let totalBytes = 0; // Initialize total bytes downloaded
+
   https.get(updateUrl, (response) => {
-      // Check if response is a redirect
-      if (response.statusCode === 302) {
-          const redirectUrl = response.headers.location; // Get the new URL
-          // Perform a new GET request to the redirected URL
-          https.get(redirectUrl, (redirectResponse) => {
-              if (redirectResponse.statusCode === 200) {
-                  redirectResponse.pipe(fileStream);
-                  fileStream.on('finish', () => {
-                      fileStream.close();
-                      verifyDownloadedFile(file);
-                  });
-              } else {
-                  console.error(`Failed to download update from redirect, status code: ${redirectResponse.statusCode}`);
-              }
-          }).on('error', (err) => {
-              console.error('Error downloading update from redirect:', err);
+    // Check if response is a redirect
+    if (response.statusCode === 302) {
+      const redirectUrl = response.headers.location; // Get the new URL
+      // Perform a new GET request to the redirected URL
+      https.get(redirectUrl, (redirectResponse) => {
+        if (redirectResponse.statusCode === 200) {
+          redirectResponse.pipe(fileStream);
+          redirectResponse.on('data', (chunk) => {
+            totalBytes += chunk.length; // Accumulate bytes
+            console.log(`Downloaded: ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`); // Log in MB
           });
-      } else if (response.statusCode === 200) {
-          // Handle normal response
-          response.pipe(fileStream);
           fileStream.on('finish', () => {
-              fileStream.close();
-              verifyDownloadedFile(file);
+            fileStream.close();
+            logZipContents(file); // Log zip contents after download
+            verifyDownloadedFile(file);
           });
-      } else {
-          console.error(`Failed to download update, status code: ${response.statusCode}`);
-      }
+        } else {
+          console.error(`Failed to download update from redirect, status code: ${redirectResponse.statusCode}`);
+        }
+      }).on('error', (err) => {
+        console.error('Error downloading update from redirect:', err);
+      });
+    } else if (response.statusCode === 200) {
+      // Handle normal response
+      response.pipe(fileStream);
+      response.on('data', (chunk) => {
+        totalBytes += chunk.length; // Accumulate bytes
+        console.log(`Downloaded: ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`); // Log in MB
+      });
+      fileStream.on('finish', () => {
+        fileStream.close();
+        logZipContents(file); // Log zip contents after download
+        verifyDownloadedFile(file);
+      });
+    } else {
+      console.error(`Failed to download update, status code: ${response.statusCode}`);
+    }
   }).on('error', (err) => {
-      console.error('Error downloading update:', err);
+    console.error('Error downloading update:', err);
   });
+}
+
+function logZipContents(zipFilePath) {
+  fs.createReadStream(zipFilePath)
+    .pipe(unzipper.Parse())
+    .on('entry', (entry) => {
+      console.log(`File: ${entry.path} - Size: ${entry.vars.uncompressedSize} bytes`);
+      entry.autodrain(); // Drains the entry (essentially ignores the data)
+    })
+    .on('close', () => {
+      console.log('Finished reading zip contents.');
+    })
+    .on('error', (err) => {
+      console.error('Error reading zip file:', err);
+    });
 }
 
 function verifyDownloadedFile(filePath) {
@@ -179,13 +207,22 @@ function isZipFile(filePath) {
 
 // Function to handle installation and restart
 function installAndRestart(zipFile) {
-  const unzipper = require('unzipper'); // Assuming you use unzipper package to extract the update
-  const extractPath = path.join(app.getAppPath(), '..'); // Extract to app root
+  const tempPath = path.join(app.getPath('temp'), 'update'); // Extract to a temp directory
+  fs.mkdirSync(tempPath, { recursive: true }); // Create temp directory
 
   fs.createReadStream(zipFile)
-    .pipe(unzipper.Extract({ path: extractPath }))
+    .pipe(unzipper.Extract({ path: tempPath }))
     .on('close', () => {
       console.log('Update installed. Restarting app...');
+      
+      // Move extracted files to app directory
+      const extractedFiles = fs.readdirSync(tempPath);
+      extractedFiles.forEach(file => {
+        const srcPath = path.join(tempPath, file);
+        const destPath = path.join(app.getAppPath(), file);
+        fs.renameSync(srcPath, destPath); // Move each file
+      });
+
       app.relaunch();
       app.exit();
     })
@@ -193,6 +230,7 @@ function installAndRestart(zipFile) {
       console.error('Error during update extraction:', err);
     });
 }
+
 
 app.on('ready', createIntroWindow);
 
@@ -207,3 +245,4 @@ app.on('activate', () => {
     createMainWindow();
   }
 });
+
