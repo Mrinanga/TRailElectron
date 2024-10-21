@@ -1,13 +1,13 @@
+const https = require('https');
 const { app, BrowserWindow, dialog, autoUpdater } = require('electron');
 const path = require('path');
-const https = require('https');
 require('@electron/remote/main').initialize();
 
 let introWindow;
 let mainWindow;
 
 const server = 'https://drive.google.com/uc?export=download&id=';
-const versionFileId = '1avPXqdukZf2UQX8EpWBER_uyXpivdH7Y';  // Replace with the Google Drive file ID for latest.json
+const versionFileId = '1avPXqdukZf2UQX8EpWBER_uyXpivdH7Y'; // Replace with the Google Drive file ID for latest.json
 
 function createIntroWindow() {
   introWindow = new BrowserWindow({
@@ -54,31 +54,48 @@ function createMainWindow() {
     mainWindow = null;
   });
 
-  checkForUpdates();  // Add this to check for updates after main window loads
+  checkForUpdates();
 }
 
 // Function to check for updates using Google Drive
 function checkForUpdates() {
-  const versionUrl = `${server}${versionFileId}`;  // URL to get the latest version info from Google Drive
+  const versionUrl = `${server}${versionFileId}`;
 
   https.get(versionUrl, (res) => {
-    let data = '';
+    if (res.statusCode === 303 && res.headers.location) {
+      // Follow the redirection to the new URL
+      const redirectedUrl = res.headers.location;
+      https.get(redirectedUrl, (redirectRes) => {
+        let data = '';
+        redirectRes.on('data', (chunk) => {
+          data += chunk;
+        });
 
-    res.on('data', (chunk) => {
-      data += chunk;
-    });
+        redirectRes.on('end', () => {
+          try {
+            console.log('Received data:', data);
+            const jsonData = JSON.parse(data.trim());
 
-    res.on('end', () => {
-      const latestVersion = JSON.parse(data).version;
-      const currentVersion = app.getVersion();
+            const latestVersion = jsonData.version;
+            const currentVersion = app.getVersion();
 
-      if (latestVersion !== currentVersion) {
-        const updateUrl = JSON.parse(data).downloadUrl;
-        downloadUpdate(updateUrl);
-      } else {
-        console.log('App is up to date.');
-      }
-    });
+            if (latestVersion !== currentVersion) {
+              const updateUrl = jsonData.downloadUrl;
+              downloadUpdate(updateUrl);
+            } else {
+              console.log('App is up to date.');
+            }
+          } catch (error) {
+            console.error('Error parsing version info:', error);
+            console.log('Raw data received:', data);
+          }
+        });
+      }).on('error', (err) => {
+        console.error('Error fetching redirected version info:', err);
+      });
+    } else {
+      console.error('Unexpected status code:', res.statusCode);
+    }
   }).on('error', (err) => {
     console.error('Error fetching version info:', err);
   });
