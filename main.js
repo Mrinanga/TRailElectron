@@ -205,24 +205,19 @@ function isZipFile(filePath) {
   return buffer.toString('hex') === '504b0304'; // ZIP file signature
 }
 
+
+
 // Function to handle installation and restart
 function installAndRestart(zipFile) {
-  const tempPath = path.join(app.getPath('temp'), 'update'); // Extract to a temp directory
-  fs.mkdirSync(tempPath, { recursive: true }); // Create temp directory
+  const appPath = app.getAppPath(); // Get the app's current path
 
+  // Extract the ZIP directly to the app's directory
   fs.createReadStream(zipFile)
-    .pipe(unzipper.Extract({ path: tempPath }))
+    .pipe(unzipper.Extract({ path: appPath }))
     .on('close', () => {
-      console.log('Update installed. Restarting app...');
-      
-      // Move extracted files to app directory
-      const extractedFiles = fs.readdirSync(tempPath);
-      extractedFiles.forEach(file => {
-        const srcPath = path.join(tempPath, file);
-        const destPath = path.join(app.getAppPath(), file);
-        fs.renameSync(srcPath, destPath); // Move each file
-      });
+      console.log('Files replaced. Restarting app...');
 
+      // Restart the app to apply the update
       app.relaunch();
       app.exit();
     })
@@ -230,7 +225,6 @@ function installAndRestart(zipFile) {
       console.error('Error during update extraction:', err);
     });
 }
-
 
 app.on('ready', createIntroWindow);
 
