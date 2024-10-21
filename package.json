@@ -18,7 +18,9 @@
   "dependencies": {
     "@electron/remote": "^2.1.2",
     "is-dev": "^0.1.4",
-    "react-router-dom": "^6.25.1"
+    "puppeteer": "^23.6.0",
+    "react-router-dom": "^6.25.1",
+    "unzipper": "^0.12.3"
   },
   "build": {
     "appId": "com.digitalpanda.2024",
@@ -27,7 +29,6 @@
     "directories": {
       "output": "dist"
     },
-
     "files": [
       "build/**/*",
       "main.js",
@@ -35,7 +36,6 @@
       "intro.html",
       "assets/**/*"
     ],
-
     "win": {
       "target": "nsis",
       "icon": "assets/icons/icon.ico",

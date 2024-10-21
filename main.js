@@ -1,13 +1,14 @@
-const https = require('https');
-const { app, BrowserWindow, dialog, autoUpdater } = require('electron');
+const { app, BrowserWindow, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const https = require('https');
 require('@electron/remote/main').initialize();
 
 let introWindow;
 let mainWindow;
 
 const server = 'https://drive.google.com/uc?export=download&id=';
-const versionFileId = '1avPXqdukZf2UQX8EpWBER_uyXpivdH7Y'; // Replace with the Google Drive file ID for latest.json
+const versionFileId = '1avPXqdukZf2UQX8EpWBER_uyXpivdH7Y';  // Replace with your Google Drive latest.json ID
 
 function createIntroWindow() {
   introWindow = new BrowserWindow({
@@ -60,10 +61,8 @@ function createMainWindow() {
 // Function to check for updates using Google Drive
 function checkForUpdates() {
   const versionUrl = `${server}${versionFileId}`;
-
   https.get(versionUrl, (res) => {
     if (res.statusCode === 303 && res.headers.location) {
-      // Follow the redirection to the new URL
       const redirectedUrl = res.headers.location;
       https.get(redirectedUrl, (redirectRes) => {
         let data = '';
@@ -103,26 +102,96 @@ function checkForUpdates() {
 
 function downloadUpdate(updateUrl) {
   const file = path.join(app.getPath('userData'), 'update.zip');
-  const fileStream = require('fs').createWriteStream(file);
+  const fileStream = fs.createWriteStream(file);
 
   https.get(updateUrl, (response) => {
-    response.pipe(fileStream);
-
-    fileStream.on('finish', () => {
-      dialog.showMessageBox({
-        type: 'info',
-        buttons: ['Restart now', 'Later'],
-        defaultId: 0,
-        message: 'A new update has been downloaded. Restart the application to install it.',
-      }).then(result => {
-        if (result.response === 0) {
-          autoUpdater.quitAndInstall();
-        }
-      });
-    });
+      // Check if response is a redirect
+      if (response.statusCode === 302) {
+          const redirectUrl = response.headers.location; // Get the new URL
+          // Perform a new GET request to the redirected URL
+          https.get(redirectUrl, (redirectResponse) => {
+              if (redirectResponse.statusCode === 200) {
+                  redirectResponse.pipe(fileStream);
+                  fileStream.on('finish', () => {
+                      fileStream.close();
+                      verifyDownloadedFile(file);
+                  });
+              } else {
+                  console.error(`Failed to download update from redirect, status code: ${redirectResponse.statusCode}`);
+              }
+          }).on('error', (err) => {
+              console.error('Error downloading update from redirect:', err);
+          });
+      } else if (response.statusCode === 200) {
+          // Handle normal response
+          response.pipe(fileStream);
+          fileStream.on('finish', () => {
+              fileStream.close();
+              verifyDownloadedFile(file);
+          });
+      } else {
+          console.error(`Failed to download update, status code: ${response.statusCode}`);
+      }
   }).on('error', (err) => {
-    console.error('Error downloading update:', err);
+      console.error('Error downloading update:', err);
   });
+}
+
+function verifyDownloadedFile(filePath) {
+  fs.stat(filePath, (err, stats) => {
+    if (err) {
+      console.error('Error checking file stats:', err);
+      return;
+    }
+
+    if (stats.size === 0) {
+      console.error('Downloaded file is empty.');
+      return;
+    }
+
+    if (!isZipFile(filePath)) {
+      console.error('Downloaded file is not a valid ZIP file.');
+      return;
+    }
+
+    dialog.showMessageBox({
+      type: 'info',
+      buttons: ['Restart now', 'Later'],
+      defaultId: 0,
+      message: 'A new update has been downloaded. Restart the application to install it.',
+    }).then(result => {
+      if (result.response === 0) {
+        installAndRestart(filePath);
+      }
+    });
+  });
+}
+
+// Function to check if the downloaded file is a valid ZIP
+function isZipFile(filePath) {
+  const buffer = Buffer.alloc(4);
+  const fd = fs.openSync(filePath, 'r');
+  fs.readSync(fd, buffer, 0, 4, 0);
+  fs.closeSync(fd);
+  // Check the ZIP file signature
+  return buffer.toString('hex') === '504b0304'; // ZIP file signature
+}
+
+// Function to handle installation and restart
+function installAndRestart(zipFile) {
+  const unzipper = require('unzipper'); // Assuming you use unzipper package to extract the update
+  const extractPath = path.join(app.getAppPath(), '..'); // Extract to app root
+
+  fs.createReadStream(zipFile)
+    .pipe(unzipper.Extract({ path: extractPath }))
+    .on('close', () => {
+      console.log('Update installed. Restarting app...');
+      app.relaunch();
+      app.exit();
+    })
+    .on('error', (err) => {
+      console.error('Error during update extraction:', err);
+    });
 }
 
 app.on('ready', createIntroWindow);
