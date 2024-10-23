@@ -1,15 +1,15 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, globalShortcut } = require('electron');
 const path = require('path');
-const fs = require('fs');
-const https = require('https');
-const unzipper = require('unzipper'); // Import unzipper for logging zip contents
 require('@electron/remote/main').initialize();
+const { autoUpdater } = require('electron-updater');
+const log = require('electron-log');
 
 let introWindow;
 let mainWindow;
 
-const server = 'https://drive.google.com/uc?export=download&id=';
-const versionFileId = '1avPXqdukZf2UQX8EpWBER_uyXpivdH7Y';  // Replace with your Google Drive latest.json ID
+// Enable detailed logging for autoUpdater
+log.transports.file.level = 'info'; // Log all info level and above
+autoUpdater.logger = log;
 
 function createIntroWindow() {
   introWindow = new BrowserWindow({
@@ -23,6 +23,7 @@ function createIntroWindow() {
       nodeIntegration: true,
       contextIsolation: false,
       enableRemoteModule: true,
+      devTools: true,
     },
   });
 
@@ -44,6 +45,7 @@ function createMainWindow() {
       nodeIntegration: true,
       contextIsolation: false,
       enableRemoteModule: true,
+      devTools: true,
     },
   });
 
@@ -52,191 +54,68 @@ function createMainWindow() {
 
   require('@electron/remote/main').enable(mainWindow.webContents);
 
+  // Open DevTools on startup for debugging
+  mainWindow.webContents.openDevTools();
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 
   checkForUpdates();
+
+  globalShortcut.register('CommandOrControl+I', () => {
+    if (mainWindow) {
+      mainWindow.webContents.openDevTools();
+    }
+  });
 }
 
-// Function to check for updates using Google Drive
 function checkForUpdates() {
-  const versionUrl = `${server}${versionFileId}`;
-  https.get(versionUrl, (res) => {
-    if (res.statusCode === 303 && res.headers.location) {
-      const redirectedUrl = res.headers.location;
-      https.get(redirectedUrl, (redirectRes) => {
-        let data = '';
-        redirectRes.on('data', (chunk) => {
-          data += chunk;
-        });
+  autoUpdater.checkForUpdatesAndNotify();
 
-        redirectRes.on('end', () => {
-          try {
-            console.log('Received data:', data);
-            const jsonData = JSON.parse(data.trim());
-
-            const latestVersion = jsonData.version;
-            const currentVersion = app.getVersion();
-
-            if (latestVersion !== currentVersion) {
-              const updateUrl = jsonData.downloadUrl;
-              downloadUpdate(updateUrl);
-            } else {
-              console.log('App is up to date.');
-            }
-          } catch (error) {
-            console.error('Error parsing version info:', error);
-            console.log('Raw data received:', data);
-          }
-        });
-      }).on('error', (err) => {
-        console.error('Error fetching redirected version info:', err);
-      });
-    } else {
-      console.error('Unexpected status code:', res.statusCode);
-    }
-  }).on('error', (err) => {
-    console.error('Error fetching version info:', err);
-  });
-}
-
-function downloadUpdate(updateUrl) {
-  const file = path.join(app.getPath('userData'), 'update.zip');
-  const fileStream = fs.createWriteStream(file);
-
-  let totalBytes = 0; // Initialize total bytes downloaded
-
-  https.get(updateUrl, (response) => {
-    // Check if response is a redirect
-    if (response.statusCode === 302) {
-      const redirectUrl = response.headers.location; // Get the new URL
-      // Perform a new GET request to the redirected URL
-      https.get(redirectUrl, (redirectResponse) => {
-        if (redirectResponse.statusCode === 200) {
-          redirectResponse.pipe(fileStream);
-          redirectResponse.on('data', (chunk) => {
-            totalBytes += chunk.length; // Accumulate bytes
-            console.log(`Downloaded: ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`); // Log in MB
-          });
-          fileStream.on('finish', () => {
-            fileStream.close();
-            logZipContents(file); // Log zip contents after download
-            verifyDownloadedFile(file);
-          });
-        } else {
-          console.error(`Failed to download update from redirect, status code: ${redirectResponse.statusCode}`);
-        }
-      }).on('error', (err) => {
-        console.error('Error downloading update from redirect:', err);
-      });
-    } else if (response.statusCode === 200) {
-      // Handle normal response
-      response.pipe(fileStream);
-      response.on('data', (chunk) => {
-        totalBytes += chunk.length; // Accumulate bytes
-        console.log(`Downloaded: ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`); // Log in MB
-      });
-      fileStream.on('finish', () => {
-        fileStream.close();
-        logZipContents(file); // Log zip contents after download
-        verifyDownloadedFile(file);
-      });
-    } else {
-      console.error(`Failed to download update, status code: ${response.statusCode}`);
-    }
-  }).on('error', (err) => {
-    console.error('Error downloading update:', err);
-  });
-}
-
-function logZipContents(zipFilePath) {
-  fs.createReadStream(zipFilePath)
-    .pipe(unzipper.Parse())
-    .on('entry', (entry) => {
-      console.log(`File: ${entry.path} - Size: ${entry.vars.uncompressedSize} bytes`);
-      entry.autodrain(); // Drains the entry (essentially ignores the data)
-    })
-    .on('close', () => {
-      console.log('Finished reading zip contents.');
-    })
-    .on('error', (err) => {
-      console.error('Error reading zip file:', err);
-    });
-}
-
-function verifyDownloadedFile(filePath) {
-  fs.stat(filePath, (err, stats) => {
-    if (err) {
-      console.error('Error checking file stats:', err);
-      return;
-    }
-
-    if (stats.size === 0) {
-      console.error('Downloaded file is empty.');
-      return;
-    }
-
-    if (!isZipFile(filePath)) {
-      console.error('Downloaded file is not a valid ZIP file.');
-      return;
-    }
-
+  autoUpdater.on('update-available', (info) => {
+    log.info('Update URL:', info.files[0].url);
+    log.info('Update available:', info);
     dialog.showMessageBox({
       type: 'info',
-      buttons: ['Restart now', 'Later'],
-      defaultId: 0,
-      message: 'A new update has been downloaded. Restart the application to install it.',
+      title: 'Update Available',
+      message: 'A new version is available. Downloading now...',
+      buttons: ['OK'],
+    });
+  });
+  
+  autoUpdater.on('update-downloaded', (info) => {
+    log.info('Update downloaded:', info);
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Update Ready',
+      message: 'A new update has been downloaded. Restart the application to apply the update.',
+      buttons: ['Restart', 'Later'],
     }).then(result => {
       if (result.response === 0) {
-        installAndRestart(filePath);
+        autoUpdater.quitAndInstall();
       }
     });
   });
-}
 
-// Function to check if the downloaded file is a valid ZIP
-function isZipFile(filePath) {
-  const buffer = Buffer.alloc(4);
-  const fd = fs.openSync(filePath, 'r');
-  fs.readSync(fd, buffer, 0, 4, 0);
-  fs.closeSync(fd);
-  // Check the ZIP file signature
-  return buffer.toString('hex') === '504b0304'; // ZIP file signature
-}
-
-
-
-// Function to handle installation and restart
-function installAndRestart(zipFile) {
-  const appPath = app.getAppPath(); // Get the app's current path
-
-  // Extract the ZIP directly to the app's directory
-  fs.createReadStream(zipFile)
-    .pipe(unzipper.Extract({ path: appPath }))
-    .on('close', () => {
-      console.log('Files replaced. Restarting app...');
-
-      // Restart the app to apply the update
-      app.relaunch();
-      app.exit();
-    })
-    .on('error', (err) => {
-      console.error('Error during update extraction:', err);
-    });
+  autoUpdater.on('error', (error) => {
+    log.error('Error in auto-updater:', error);
+    dialog.showErrorBox('Update Error', error == null ? 'unknown' : (error.stack || error).toString());
+  });
 }
 
 app.on('ready', createIntroWindow);
-
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
-
 app.on('activate', () => {
   if (mainWindow === null) {
     createMainWindow();
   }
 });
 
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+});
