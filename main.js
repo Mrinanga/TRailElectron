@@ -54,9 +54,6 @@ function createMainWindow() {
 
   require('@electron/remote/main').enable(mainWindow.webContents);
 
-  // Open DevTools on startup for debugging
-  mainWindow.webContents.openDevTools();
-
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -71,11 +68,12 @@ function createMainWindow() {
 }
 
 function checkForUpdates() {
+  log.info('Checking for updates...');
   autoUpdater.checkForUpdatesAndNotify();
 
   autoUpdater.on('update-available', (info) => {
-    log.info('Update URL:', info.files[0].url);
-    log.info('Update available:', info);
+    log.info('Update available. Update info:', info);
+    log.info('Downloading update from URL:', info.files[0].url);
     dialog.showMessageBox({
       type: 'info',
       title: 'Update Available',
@@ -83,9 +81,9 @@ function checkForUpdates() {
       buttons: ['OK'],
     });
   });
-  
+
   autoUpdater.on('update-downloaded', (info) => {
-    log.info('Update downloaded:', info);
+    log.info('Update downloaded. Version:', info.version);
     dialog.showMessageBox({
       type: 'info',
       title: 'Update Ready',
@@ -93,14 +91,19 @@ function checkForUpdates() {
       buttons: ['Restart', 'Later'],
     }).then(result => {
       if (result.response === 0) {
+        log.info('User chose to restart and install the update.');
         autoUpdater.quitAndInstall();
+      } else {
+        log.info('User chose to install the update later.');
       }
     });
   });
 
   autoUpdater.on('error', (error) => {
     log.error('Error in auto-updater:', error);
-    dialog.showErrorBox('Update Error', error == null ? 'unknown' : (error.stack || error).toString());
+    const errorMessage = error.stack || error.message || error.toString();
+    log.error('Full error details:', errorMessage);
+    dialog.showErrorBox('Update Error', `Error: ${errorMessage}`);
   });
 }
 

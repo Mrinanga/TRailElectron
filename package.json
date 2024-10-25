@@ -25,7 +25,6 @@
   },
   "build": {
     "appId": "com.digitalpanda.2024",
-    "icon": "assets/favicon.ico",
     "productName": "BillingSoftwares",
     "directories": {
       "output": "dist"
@@ -50,6 +49,12 @@
       ],
       "icon": "assets/icons/icon.ico",
       "signAndEditExecutable": false
+    },
+    "mac": {
+      "icon": "assets/icons/icon.icns"
+    },
+    "linux": {
+      "icon": "assets/icons/icon.png"
     },
     "nsis": {
       "oneClick": false,
