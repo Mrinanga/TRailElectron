@@ -18,7 +18,7 @@ function createIntroWindow() {
     frame: false,
     transparent: true,
     alwaysOnTop: true,
-    icon: path.join(app.getAppPath(), 'build', 'favicon.ico'),
+    icon: path.join(app.getAppPath(), 'assets', 'icons', 'icon.ico'),
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
@@ -30,9 +30,20 @@ function createIntroWindow() {
   const introHtmlPath = path.join(app.getAppPath(), 'intro.html');
   introWindow.loadFile(introHtmlPath);
 
+  // Handle intro window errors
+  introWindow.webContents.on('crashed', (event) => {
+    log.error('Intro window crashed:', event);
+  });
+
+  introWindow.on('unresponsive', () => {
+    log.error('Intro window became unresponsive');
+  });
+
   setTimeout(() => {
-    introWindow.close();
-    createMainWindow();
+    if (introWindow) {
+      introWindow.close();
+      createMainWindow();
+    }
   }, 3100);
 }
 
@@ -40,7 +51,8 @@ function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 800,
     height: 600,
-    icon: path.join(app.getAppPath(), 'build', 'favicon.ico'),
+    show: false, // Don't show until ready-to-show
+    icon: path.join(app.getAppPath(), 'assets', 'icons', 'icon.ico'),
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
@@ -52,14 +64,52 @@ function createMainWindow() {
   const mainHtmlPath = path.join(app.getAppPath(), 'build', 'index.html');
   mainWindow.loadFile(mainHtmlPath);
 
+  // Enable remote module
   require('@electron/remote/main').enable(mainWindow.webContents);
 
+  // Show window when ready
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    mainWindow.focus();
+  });
+
+  // Handle window state
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 
+  // Handle crashes and unresponsiveness
+  mainWindow.webContents.on('crashed', (event) => {
+    log.error('Main window crashed:', event);
+    dialog.showMessageBox({
+      type: 'error',
+      title: 'Application Error',
+      message: 'The application has crashed. Please restart.',
+      buttons: ['OK']
+    }).then(() => {
+      app.relaunch();
+      app.exit(0);
+    });
+  });
+
+  mainWindow.on('unresponsive', () => {
+    log.error('Main window became unresponsive');
+    dialog.showMessageBox({
+      type: 'warning',
+      title: 'Application Not Responding',
+      message: 'The application is not responding. Wait or restart?',
+      buttons: ['Wait', 'Restart']
+    }).then(result => {
+      if (result.response === 1) {
+        app.relaunch();
+        app.exit(0);
+      }
+    });
+  });
+
   checkForUpdates();
 
+  // Register DevTools shortcut
   globalShortcut.register('CommandOrControl+I', () => {
     if (mainWindow) {
       mainWindow.webContents.openDevTools();
@@ -69,7 +119,20 @@ function createMainWindow() {
 
 function checkForUpdates() {
   log.info('Checking for updates...');
-  autoUpdater.checkForUpdatesAndNotify();
+  
+  // Configure update checking interval
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  try {
+    autoUpdater.checkForUpdatesAndNotify();
+  } catch (error) {
+    log.error('Error checking for updates:', error);
+  }
+
+  autoUpdater.on('checking-for-update', () => {
+    log.info('Checking for updates...');
+  });
 
   autoUpdater.on('update-available', (info) => {
     log.info('Update available. Update info:', info);
@@ -77,9 +140,18 @@ function checkForUpdates() {
     dialog.showMessageBox({
       type: 'info',
       title: 'Update Available',
-      message: 'A new version is available. Downloading now...',
+      message: `Version ${info.version} is available. Downloading now...`,
       buttons: ['OK'],
     });
+  });
+
+  autoUpdater.on('update-not-available', (info) => {
+    log.info('Update not available:', info);
+  });
+
+  autoUpdater.on('download-progress', (progressObj) => {
+    let message = `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent}%`;
+    log.info(message);
   });
 
   autoUpdater.on('update-downloaded', (info) => {
@@ -92,7 +164,7 @@ function checkForUpdates() {
     }).then(result => {
       if (result.response === 0) {
         log.info('User chose to restart and install the update.');
-        autoUpdater.quitAndInstall();
+        autoUpdater.quitAndInstall(true, true);
       } else {
         log.info('User chose to install the update later.');
       }
@@ -107,12 +179,22 @@ function checkForUpdates() {
   });
 }
 
-app.on('ready', createIntroWindow);
+// App event handlers
+app.on('ready', () => {
+  createIntroWindow();
+  
+  // Check for updates every hour
+  setInterval(() => {
+    checkForUpdates();
+  }, 60 * 60 * 1000);
+});
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
+
 app.on('activate', () => {
   if (mainWindow === null) {
     createMainWindow();
@@ -121,4 +203,12 @@ app.on('activate', () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  log.error('Uncaught exception:', error);
+  dialog.showErrorBox('Error', 'An unexpected error occurred. The application will restart.');
+  app.relaunch();
+  app.exit(1);
 });
