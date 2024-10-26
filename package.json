@@ -24,18 +24,23 @@
     "unzipper": "^0.12.3"
   },
   "build": {
-    "appId": "com.digitalpanda.2024",
+  "appId": "com.digitalpanda.2024",
+  "productName": "BillingSoftware",
+  "icon": "assets/icons/icon.ico",
+  "extraMetadata": {
     "productName": "BillingSoftware",
-    "icon": "assets/icons/icon.ico",
-    "extraMetadata": {
-      "electron-builder-icon": "assets/icons/icon.ico",
-      "author": "DigitalPandaAxom",
-      "copyright": "DigitalPandaAxom",
-      "fileDescription": "application is in production",
-      "fileName": "BillingSoftware",
-      "productVersion": "1.0.0"
+    "author": "DigitalPandaAxom",
+    "copyright": "DigitalPandaAxom",
+    "fileDescription": "Billing and Accountancy Application",
+    "productVersion": "1.0.0"
+  },
 
-    },
+  "extraResources": [
+    {
+      "from": "assets/icons/icon.ico",
+      "to": "icon.ico"
+    }
+  ],
 
     "directories": {
       "output": "dist"
@@ -48,6 +53,7 @@
       "assets/**/*",
       "node_modules/**/*"
     ],
+
     "win": {
       "target": [
         {
@@ -67,11 +73,15 @@
     "linux": {
       "icon": "assets/icons/icon.png"
     },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": true,
-      "allowToChangeInstallationDirectory": true
-    },
+
+  "nsis": {
+    "oneClick": false,
+    "perMachine": true,
+    "allowToChangeInstallationDirectory": true,
+    "artifactName": "${productName}_Setup_${version}.${ext}",
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true
+},
     "publish": [
       {
         "provider": "github",
