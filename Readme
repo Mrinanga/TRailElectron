@@ -1,0 +1,123 @@
+# Billing Software
+
+This project is an Electron-based billing software application built with React. It features an intuitive interface, automatic updates, and a guided installation setup.
+
+## Features
+- **Intro Screen**: A splash screen that transitions to the main application window.
+- **Main Application**: Includes billing functionalities with crash and unresponsive handling.
+- **Auto-Updater**: Automatically checks and installs updates via GitHub releases.
+- **Shortcuts**: Developer tools accessible using `Ctrl+I` or `Cmd+I`.
+- **Installer**: Customizable NSIS installer for Windows with portable version support.
+
+## Requirements
+- Node.js (>=16.x.x)
+- npm (>=7.x.x)
+- Windows OS for building and testing the Windows installer
+
+## Setup Instructions
+
+### Clone the Repository
+```bash
+git clone https://github.com/Mrinanga/TRailElectron.git
+cd TRailElectron
+```
+
+### Install Dependencies
+```bash
+npm install
+```
+
+### Development Mode
+Start the application in development mode:
+```bash
+npm start
+```
+
+### Build and Distribute
+
+#### Package the Application
+Create unpackaged build artifacts for testing:
+```bash
+npm run package
+```
+
+#### Create a Windows Installer
+Build the application and generate an installer:
+```bash
+npm run dist
+```
+
+#### Create a Portable Version
+Build the portable version:
+```bash
+npm run dist:portable
+```
+
+### Post-install Dependencies
+Ensure post-install dependencies are correctly resolved:
+```bash
+npm run postinstall
+```
+
+## File Structure
+- **assets/**: Contains icons and resources used in the application.
+- **build/**: React app build files.
+- **main.js**: Main Electron process script.
+- **intro.html**: HTML for the splash screen.
+- **package.json**: Project configuration and dependencies.
+
+## Configuration
+The `package.json` file contains the following key configuration settings:
+
+- **build.appId**: Application ID for packaging.
+- **build.productName**: Name of the application.
+- **build.directories.output**: Directory for build outputs.
+- **build.win.target**: Specifies NSIS and portable targets.
+- **build.nsis**: NSIS installer options.
+- **build.publish**: GitHub publish configuration.
+
+## Auto-Updater
+The application uses `electron-updater` to manage updates. Ensure the repository and releases are configured properly on GitHub.
+
+### Update Check Frequency
+Updates are checked every hour automatically.
+
+## Error Handling
+- **Crash Handling**: Automatically restarts the application if it crashes.
+- **Unresponsive State**: Prompts the user to wait or restart.
+
+## License
+This software is proprietary and developed by Digitalpanda Axom.
+
+## Author
+DigitalpandaAxom
+[digitalpanda4u@gmail.com](mailto:digitalpanda4u@gmail.com)
+
+## Support
+For support or feature requests, open an issue on the [GitHub repository](https://github.com/Mrinanga/TRailElectron/issues).
+
+
+## AuthorTo use this configuration:
+
+Create a GitHub Personal Access Token (with repo permissions)
+
+Add it as GH_TOKEN in your environment variables
+
+## For releases, run:
+
+
+npm run release (For For releases, run:)
+
+npm start (For development:)
+
+npm run dist (To build installers)
+
+Create properly signed releases (when configured with certificates)
+
+Generate automatic updates from GitHub releases
+
+Create both installer and portable versions
+
+Preserve user data during updates
+
+Handle crash reporting through electron-log
