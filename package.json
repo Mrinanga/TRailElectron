@@ -28,7 +28,10 @@
     "icon": "assets/icons/icon.ico",
     "directories": {
       "output": "dist",
-      "buildResources": "assets"
+      "buildResources": "assets",
+    "releaseInfo": {
+    "releaseNotes": "Fixed token error and improved auto-update reliability."
+  }
     },
     "files": [
       "build/**/*",
@@ -66,8 +69,7 @@
       "provider": "github",
       "owner": "Mrinanga",
       "repo": "TRailElectron",
-      "releaseType": "release",
-      "token": "$GH_TOKEN"
+      "releaseType": "release"
     },
     "asar": true,
     "asarUnpack": [

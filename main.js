@@ -11,6 +11,18 @@ let mainWindow;
 log.transports.file.level = 'info';
 autoUpdater.logger = log;
 
+// Set the GitHub token for auto-updater
+if (process.env.GH_TOKEN) {
+  autoUpdater.setFeedURL({
+    provider: 'github',
+    owner: 'Mrinanga',
+    repo: 'TRailElectron',
+    token: process.env.GH_TOKEN,
+  });
+} else {
+  log.warn('GitHub token not found. Auto-updates may not work.');
+}
+
 function createIntroWindow() {
   introWindow = new BrowserWindow({
     width: 600,
@@ -147,9 +159,10 @@ function checkForUpdates() {
 app.on('ready', () => {
   createIntroWindow();
 
+  // Check for updates every hour
   setInterval(() => {
     checkForUpdates();
-  }, 60 * 60 * 1000); // Check for updates every hour
+  }, 60 * 60 * 1000);
 });
 
 app.on('window-all-closed', () => {
