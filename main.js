@@ -2,6 +2,7 @@ const { app, BrowserWindow, dialog, globalShortcut } = require('electron');
 const path = require('path');
 const log = require('electron-log');
 const { autoUpdater } = require('electron-updater');
+const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 require('@electron/remote/main').initialize();
 
 let introWindow;
@@ -11,16 +12,36 @@ let mainWindow;
 log.transports.file.level = 'info';
 autoUpdater.logger = log;
 
+// Function to fetch the GitHub token from the server
+async function fetchGitHubToken() {
+  try {
+    const response = await fetch('http://localhost/backend/get_github_token.php');
+    const data = await response.json();
+    if (data.token) {
+      return data.token;
+    } else {
+      log.warn('GitHub token not found in the database.');
+      return null;
+    }
+  } catch (error) {
+    log.error('Failed to fetch GitHub token:', error);
+    return null;
+  }
+}
+
 // Set the GitHub token for auto-updater
-if (process.env.GH_TOKEN) {
-  autoUpdater.setFeedURL({
-    provider: 'github',
-    owner: 'Mrinanga',
-    repo: 'TRailElectron',
-    token: process.env.GH_TOKEN,
-  });
-} else {
-  log.warn('GitHub token not found. Auto-updates may not work.');
+async function setGitHubToken() {
+  const token = await fetchGitHubToken();
+  if (token) {
+    autoUpdater.setFeedURL({
+      provider: 'github',
+      owner: 'Mrinanga',
+      repo: 'TRailElectron',
+      token: token,
+    });
+  } else {
+    log.warn('GitHub token not found. Auto-updates may not work.');
+  }
 }
 
 function createIntroWindow() {
@@ -121,6 +142,7 @@ function createMainWindow() {
 
 function checkForUpdates() {
   log.info('Checking for updates...');
+  console.log('Checking for updates...');
 
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
@@ -129,6 +151,7 @@ function checkForUpdates() {
 
   autoUpdater.on('update-available', (info) => {
     log.info('Update available:', info);
+    console.log('Update available:', info);
     dialog.showMessageBox({
       type: 'info',
       title: 'Update Available',
@@ -139,6 +162,7 @@ function checkForUpdates() {
 
   autoUpdater.on('update-downloaded', (info) => {
     log.info('Update downloaded:', info);
+    console.log('Update downloaded:', info);
     dialog.showMessageBox({
       type: 'info',
       title: 'Update Ready',
@@ -151,12 +175,14 @@ function checkForUpdates() {
 
   autoUpdater.on('error', (error) => {
     log.error('Update error:', error);
+    console.log('Update error:', error);
     dialog.showErrorBox('Update Error', `Failed to update: ${error.message}`);
   });
 }
 
 // App event handlers
-app.on('ready', () => {
+app.on('ready', async () => {
+  await setGitHubToken();
   createIntroWindow();
 
   // Check for updates every hour
@@ -183,6 +209,7 @@ app.on('will-quit', () => {
 
 process.on('uncaughtException', (error) => {
   log.error('Uncaught exception:', error);
+  console.log('Uncaught exception:', error);
   dialog.showErrorBox('Error', 'An unexpected error occurred. The application will restart.');
   app.relaunch();
   app.exit(1);
