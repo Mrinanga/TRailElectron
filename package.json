@@ -1,6 +1,6 @@
 {
   "name": "billingsystem",
-  "version": "1.0.1",
+  "version": "1.0.0",
   "description": "Capable of doing Billing & Accountancy",
   "main": "main.js",
   "scripts": {
@@ -22,16 +22,17 @@
       "target": "nsis"
     },
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "assets/**/*"
     },
     "files": [
       "build/**/*",
+      "intro.html",
       "main.js",
+      "assets/**/*",
       "package.json"
     ],
-    "extraResources": [
-      "assets/"
-    ],
+    
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,

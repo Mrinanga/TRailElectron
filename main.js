@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, globalShortcut } = require('electron');
+const { app, BrowserWindow, dialog, globalShortcut, screen  } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const log = require('electron-log');
 const path = require('path');
@@ -13,6 +13,9 @@ autoUpdater.setFeedURL({
     url: `${UPDATE_SERVER_URL}/`
 });
 
+const isDev = !app.isPackaged;
+const appPath = app.getAppPath();
+
 let introWindow;
 let mainWindow;
 
@@ -23,13 +26,18 @@ function createIntroWindow() {
         frame: false,
         transparent: true,
         alwaysOnTop: true,
-        icon: path.join(__dirname, 'assets', 'icons', 'icon.ico'),
-        webPreferences: { nodeIntegration: true, contextIsolation: false }
+        icon: path.join(app.getAppPath(), 'assets', 'icons', 'icon.ico'),
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false,
+            enableRemoteModule: true,
+        },
     });
 
-    introWindow.loadFile(path.join(__dirname, 'intro.html'));
+    introWindow.loadFile(path.join(app.getAppPath(), 'intro.html'));
 
-    introWindow.on('closed', () => (introWindow = null));
+    introWindow.on('crashed', (event) => log.error('Intro window crashed:', event));
+    introWindow.on('unresponsive', () => log.error('Intro window became unresponsive'));
 
     setTimeout(() => {
         if (introWindow) {
@@ -40,15 +48,20 @@ function createIntroWindow() {
 }
 
 function createMainWindow() {
+    const { width, height } = screen.getPrimaryDisplay().workAreaSize;
     mainWindow = new BrowserWindow({
-        width: 800,
-        height: 600,
+        width: width,
+        height: height,
         show: false,
-        icon: path.join(__dirname, 'assets', 'icons', 'icon.ico'),
+        icon: path.join(appPath, 'assets', 'icons', 'icon.ico'),
         webPreferences: { nodeIntegration: true, contextIsolation: false }
     });
 
-    mainWindow.loadFile(path.join(__dirname, 'build', 'index.html'));
+    const mainFilePath = isDev
+        ? path.join(__dirname, 'build', 'index.html')
+        : path.join(appPath, 'build', 'index.html');
+
+    mainWindow.loadFile(mainFilePath);
 
     mainWindow.once('ready-to-show', () => {
         mainWindow.show();
@@ -57,6 +70,7 @@ function createMainWindow() {
 
     mainWindow.on('closed', () => (mainWindow = null));
 
+    // Debug shortcut
     globalShortcut.register('CommandOrControl+I', () => {
         if (mainWindow) mainWindow.webContents.openDevTools();
     });
@@ -66,6 +80,7 @@ function checkForUpdates() {
     autoUpdater.checkForUpdatesAndNotify();
 }
 
+// Auto-updater events
 autoUpdater.on('update-available', (info) => {
     log.info(`Update available: v${info.version}`);
     dialog.showMessageBox({
@@ -93,10 +108,20 @@ autoUpdater.on('error', (error) => {
     dialog.showErrorBox('Update Error', error.message || 'An error occurred while checking for updates.');
 });
 
+// App lifecycle events
 app.whenReady().then(createIntroWindow);
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-app.on('activate', () => { if (mainWindow === null) createMainWindow(); });
-app.on('will-quit', () => { globalShortcut.unregisterAll(); });
+
+app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('activate', () => {
+    if (mainWindow === null) createMainWindow();
+});
+
+app.on('will-quit', () => {
+    globalShortcut.unregisterAll();
+});
 
 process.on('uncaughtException', (error) => {
     log.error('Uncaught Exception:', error);
